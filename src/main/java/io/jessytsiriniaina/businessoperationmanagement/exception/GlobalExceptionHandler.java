@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -34,6 +35,19 @@ public class GlobalExceptionHandler {
                         .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                         .collect(Collectors.joining(", "));
         return buildResponse(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message, request.getRequestURI());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleConflict(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        String message = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+        // Hide raw SQL for unique violation, return user-friendly message
+        if (message != null && message.toLowerCase().contains("departments")) {
+            message = "Department name already exists";
+        } else if (message != null && message.toLowerCase().contains("unique")) {
+            message = "Resource already exists";
+        }
+        return buildResponse(HttpStatus.CONFLICT, "CONFLICT", message, request.getRequestURI());
     }
 
     @ExceptionHandler(Exception.class)
