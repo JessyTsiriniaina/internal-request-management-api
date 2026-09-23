@@ -16,7 +16,13 @@ public record RequestResponseDto(
         Instant createdAt,
         Instant updatedAt,
         boolean deleted,
-        Instant deletedAt) {
+        Instant deletedAt,
+        String rejectionReason,
+        String cancellationReason,
+        Instant startedAt,
+        Instant approvedAt,
+        Instant rejectedAt,
+        Instant cancelledAt) {
 
     public record TypeSummary(Long id, String name) {}
 

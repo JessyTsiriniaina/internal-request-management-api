@@ -32,6 +32,12 @@ public final class RequestMapper {
                 request.getCreatedAt(),
                 request.getUpdatedAt(),
                 request.isDeleted(),
-                request.getDeletedAt());
+                request.getDeletedAt(),
+                request.getRejectionReason(),
+                request.getCancellationReason(),
+                request.getStartedAt(),
+                request.getApprovedAt(),
+                request.getRejectedAt(),
+                request.getCancelledAt());
     }
 }

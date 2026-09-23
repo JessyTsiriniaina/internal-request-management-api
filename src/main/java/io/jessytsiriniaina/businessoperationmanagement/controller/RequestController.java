@@ -1,6 +1,9 @@
 package io.jessytsiriniaina.businessoperationmanagement.controller;
 
+import io.jessytsiriniaina.businessoperationmanagement.dto.request.AssignRequestDto;
+import io.jessytsiriniaina.businessoperationmanagement.dto.request.CancelRequestDto;
 import io.jessytsiriniaina.businessoperationmanagement.dto.request.CreateRequestDto;
+import io.jessytsiriniaina.businessoperationmanagement.dto.request.RejectRequestDto;
 import io.jessytsiriniaina.businessoperationmanagement.dto.request.RequestResponseDto;
 import io.jessytsiriniaina.businessoperationmanagement.dto.request.UpdateRequestDto;
 import io.jessytsiriniaina.businessoperationmanagement.enums.RequestPriority;
@@ -14,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -69,5 +73,33 @@ public class RequestController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         requestService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/start-progress")
+    public ResponseEntity<RequestResponseDto> startProgress(@PathVariable Long id) {
+        return ResponseEntity.ok(requestService.startProgress(id));
+    }
+
+    @PatchMapping("/{id}/approve")
+    public ResponseEntity<RequestResponseDto> approve(@PathVariable Long id) {
+        return ResponseEntity.ok(requestService.approve(id));
+    }
+
+    @PatchMapping("/{id}/reject")
+    public ResponseEntity<RequestResponseDto> reject(
+            @PathVariable Long id, @Valid @RequestBody RejectRequestDto dto) {
+        return ResponseEntity.ok(requestService.reject(id, dto));
+    }
+
+    @PatchMapping("/{id}/assign")
+    public ResponseEntity<RequestResponseDto> assign(
+            @PathVariable Long id, @Valid @RequestBody AssignRequestDto dto) {
+        return ResponseEntity.ok(requestService.assign(id, dto));
+    }
+
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<RequestResponseDto> cancel(
+            @PathVariable Long id, @Valid @RequestBody CancelRequestDto dto) {
+        return ResponseEntity.ok(requestService.cancel(id, dto));
     }
 }
