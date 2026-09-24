@@ -1,8 +1,10 @@
 package io.jessytsiriniaina.businessoperationmanagement.dto.request;
 
+import io.jessytsiriniaina.businessoperationmanagement.dto.requestcomment.RequestCommentResponseDto;
 import io.jessytsiriniaina.businessoperationmanagement.enums.RequestPriority;
 import io.jessytsiriniaina.businessoperationmanagement.enums.RequestStatus;
 import java.time.Instant;
+import java.util.List;
 
 public record RequestResponseDto(
         Long id,
@@ -22,7 +24,9 @@ public record RequestResponseDto(
         Instant startedAt,
         Instant approvedAt,
         Instant rejectedAt,
-        Instant cancelledAt) {
+        Instant cancelledAt,
+        long commentCount,
+        List<RequestCommentResponseDto> comments) {
 
     public record TypeSummary(Long id, String name) {}
 

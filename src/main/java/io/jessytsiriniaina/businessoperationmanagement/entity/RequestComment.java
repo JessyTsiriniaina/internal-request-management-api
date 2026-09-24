@@ -38,6 +38,12 @@ public class RequestComment {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(nullable = false)
+    private boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     protected RequestComment() {
     }
 
@@ -82,5 +88,31 @@ public class RequestComment {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public void softDelete() {
+        this.deleted = true;
+        this.deletedAt = Instant.now();
+    }
+
+    public void restore() {
+        this.deleted = false;
+        this.deletedAt = null;
     }
 }

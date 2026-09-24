@@ -1,13 +1,23 @@
 package io.jessytsiriniaina.businessoperationmanagement.mapper;
 
 import io.jessytsiriniaina.businessoperationmanagement.dto.request.RequestResponseDto;
+import io.jessytsiriniaina.businessoperationmanagement.dto.requestcomment.RequestCommentResponseDto;
 import io.jessytsiriniaina.businessoperationmanagement.entity.Request;
+import io.jessytsiriniaina.businessoperationmanagement.entity.RequestComment;
+import io.jessytsiriniaina.businessoperationmanagement.mapper.RequestCommentMapper;
+import java.util.List;
 
 public final class RequestMapper {
 
     private RequestMapper() {}
 
     public static RequestResponseDto toResponse(Request request) {
+        return toResponse(request, List.of(), 0L);
+    }
+
+    public static RequestResponseDto toResponse(Request request, List<RequestComment> comments, long commentCount) {
+        List<RequestCommentResponseDto> commentDtos =
+                comments.stream().map(RequestCommentMapper::toResponse).toList();
         return new RequestResponseDto(
                 request.getId(),
                 request.getTitle(),
@@ -38,6 +48,8 @@ public final class RequestMapper {
                 request.getStartedAt(),
                 request.getApprovedAt(),
                 request.getRejectedAt(),
-                request.getCancelledAt());
+                request.getCancelledAt(),
+                commentCount,
+                commentDtos);
     }
 }
