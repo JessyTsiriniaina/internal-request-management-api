@@ -11,10 +11,10 @@
     </parent>
 
     <groupId>io.jessytsiriniaina</groupId>
-    <artifactId>business-operation-management</artifactId>
+    <artifactId>internal-request-management-api</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>business-operation-management</name>
-    <description>business-operation-management</description>
+    <name>internal-request-management-api</name>
+    <description>Internal Request Management API — role-based workflow for leave/equipment/purchase/IT requests</description>
 
     <url/>
     <licenses>

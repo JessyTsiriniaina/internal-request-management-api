@@ -1,6 +1,6 @@
 spring:
   application:
-    name: business-operation-management
+    name: internal-request-management-api
 
   config:
     import: optional:file:.env[.properties]
