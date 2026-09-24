@@ -1,4 +1,4 @@
--- V1: Business Operations Management schema
+-- V1: Internal Request Management schema
 
 -- Departments
 CREATE TABLE departments (
