@@ -85,7 +85,13 @@ public class RequestService {
                 requestRepository
                         .findByIdAndDeletedFalse(id)
                         .orElseThrow(() -> new ResourceNotFoundException("Request not found: " + id));
-        return RequestMapper.toResponse(request);
+        // embed preview: latest 10 comments + total count
+        java.util.List<RequestComment> allComments =
+                requestCommentRepository.findByRequestIdAndDeletedFalseOrderByCreatedAtAsc(id);
+        long count = requestCommentRepository.countByRequestIdAndDeletedFalse(id);
+        java.util.List<RequestComment> preview =
+                allComments.size() > 10 ? allComments.subList(Math.max(0, allComments.size() - 10), allComments.size()) : allComments;
+        return RequestMapper.toResponse(request, preview, count);
     }
 
     @Transactional(readOnly = true)
@@ -102,7 +108,10 @@ public class RequestService {
         Specification<Request> spec =
                 RequestSpecification.filter(
                         status, priority, typeId, createdById, assignedToId, department, includeDeleted);
-        return requestRepository.findAll(spec, pageable).map(RequestMapper::toResponse);
+        return requestRepository.findAll(spec, pageable).map(req -> {
+            long count = requestCommentRepository.countByRequestIdAndDeletedFalse(req.getId());
+            return RequestMapper.toResponse(req, java.util.List.of(), count);
+        });
     }
 
     public RequestResponseDto update(Long id, UpdateRequestDto dto) {
