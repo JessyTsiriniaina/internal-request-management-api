@@ -9,12 +9,15 @@ import io.jessytsiriniaina.internalrequestmanagement.dto.request.UpdateRequestDt
 import io.jessytsiriniaina.internalrequestmanagement.enums.RequestPriority;
 import io.jessytsiriniaina.internalrequestmanagement.enums.RequestStatus;
 import io.jessytsiriniaina.internalrequestmanagement.service.RequestService;
+import io.jessytsiriniaina.internalrequestmanagement.security.UserPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -37,8 +40,10 @@ public class RequestController {
     }
 
     @PostMapping
-    public ResponseEntity<RequestResponseDto> create(@Valid @RequestBody CreateRequestDto dto) {
-        RequestResponseDto created = requestService.create(dto);
+    public ResponseEntity<RequestResponseDto> create(
+            @Valid @RequestBody CreateRequestDto dto,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        RequestResponseDto created = requestService.create(dto, principal);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
@@ -51,47 +56,52 @@ public class RequestController {
             @RequestParam(required = false) Long assignedToId,
             @RequestParam(required = false) String department,
             @RequestParam(required = false, defaultValue = "false") Boolean includeDeleted,
-            @PageableDefault(size = 10, sort = "updatedAt") Pageable pageable) {
+            @PageableDefault(size = 10, sort = "updatedAt") Pageable pageable,
+            @AuthenticationPrincipal UserPrincipal principal) {
 
         Page<RequestResponseDto> page =
-                requestService.findAll(status, priority, typeId, createdById, assignedToId, department, includeDeleted, pageable);
+                requestService.findAll(status, priority, typeId, createdById, assignedToId, department, includeDeleted, pageable, principal);
         return ResponseEntity.ok(page);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<RequestResponseDto> findById(@PathVariable Long id) {
-        return ResponseEntity.ok(requestService.findById(id));
+    public ResponseEntity<RequestResponseDto> findById(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(requestService.findById(id, principal));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<RequestResponseDto> update(
-            @PathVariable Long id, @Valid @RequestBody UpdateRequestDto dto) {
-        return ResponseEntity.ok(requestService.update(id, dto));
+            @PathVariable Long id, @Valid @RequestBody UpdateRequestDto dto, @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(requestService.update(id, dto, principal));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        requestService.delete(id);
+    public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        requestService.delete(id, principal);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/start-progress")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public ResponseEntity<RequestResponseDto> startProgress(@PathVariable Long id) {
         return ResponseEntity.ok(requestService.startProgress(id));
     }
 
     @PatchMapping("/{id}/approve")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public ResponseEntity<RequestResponseDto> approve(@PathVariable Long id) {
         return ResponseEntity.ok(requestService.approve(id));
     }
 
     @PatchMapping("/{id}/reject")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public ResponseEntity<RequestResponseDto> reject(
             @PathVariable Long id, @Valid @RequestBody RejectRequestDto dto) {
         return ResponseEntity.ok(requestService.reject(id, dto));
     }
 
     @PatchMapping("/{id}/assign")
+    @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public ResponseEntity<RequestResponseDto> assign(
             @PathVariable Long id, @Valid @RequestBody AssignRequestDto dto) {
         return ResponseEntity.ok(requestService.assign(id, dto));
@@ -99,7 +109,7 @@ public class RequestController {
 
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<RequestResponseDto> cancel(
-            @PathVariable Long id, @Valid @RequestBody CancelRequestDto dto) {
-        return ResponseEntity.ok(requestService.cancel(id, dto));
+            @PathVariable Long id, @Valid @RequestBody CancelRequestDto dto, @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(requestService.cancel(id, dto, principal));
     }
 }

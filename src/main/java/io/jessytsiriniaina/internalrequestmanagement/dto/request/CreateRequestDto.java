@@ -10,5 +10,5 @@ public record CreateRequestDto(
         @Size(max = 2000) String description,
         @NotNull RequestPriority priority,
         @NotNull Long typeId,
-        @NotNull Long createdById,
+        Long createdById,
         Long assignedToId) {}

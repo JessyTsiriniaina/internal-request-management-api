@@ -25,3 +25,7 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+
+jwt:
+  secret: ${JWT_SECRET:change-me-to-a-very-long-random-secret-key-for-hs512-min-64-chars-please-change-in-production}
+  expiration-ms: ${JWT_EXPIRATION_MS:3600000}

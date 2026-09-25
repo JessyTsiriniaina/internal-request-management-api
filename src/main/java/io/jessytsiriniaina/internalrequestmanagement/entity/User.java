@@ -34,8 +34,13 @@ public class User {
 
     @NotBlank
     @Size(max = 100)
-    @Column(nullable = false)
-    private String name;
+    @Column(name = "first_name", nullable = false)
+    private String firstName;
+
+    @NotBlank
+    @Size(max = 100)
+    @Column(name = "last_name", nullable = false)
+    private String lastName;
 
     @NotBlank
     @Email
@@ -75,8 +80,26 @@ public class User {
     protected User() {
     }
 
+    public User(String firstName, String lastName, String email, String password, UserRole role, Department department) {
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.email = email;
+        this.password = password;
+        this.role = role;
+        this.department = department;
+    }
+
+    /** Legacy constructor kept for tests/migrations — delegates to firstName/lastName split */
     public User(String name, String email, String password, UserRole role, Department department) {
-        this.name = name;
+        String trimmed = name != null ? name.trim() : "";
+        int idx = trimmed.indexOf(' ');
+        if (idx > 0) {
+            this.firstName = trimmed.substring(0, idx);
+            this.lastName = trimmed.substring(idx + 1).trim();
+        } else {
+            this.firstName = trimmed;
+            this.lastName = "";
+        }
         this.email = email;
         this.password = password;
         this.role = role;
@@ -99,12 +122,37 @@ public class User {
         return id;
     }
 
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
     public String getName() {
-        return name;
+        if (lastName == null || lastName.isBlank()) return firstName;
+        return firstName + " " + lastName;
     }
 
     public void setName(String name) {
-        this.name = name;
+        String trimmed = name != null ? name.trim() : "";
+        int idx = trimmed.indexOf(' ');
+        if (idx > 0) {
+            this.firstName = trimmed.substring(0, idx);
+            this.lastName = trimmed.substring(idx + 1).trim();
+        } else {
+            this.firstName = trimmed;
+            this.lastName = "";
+        }
     }
 
     public String getEmail() {

@@ -3,12 +3,14 @@ package io.jessytsiriniaina.internalrequestmanagement.controller;
 import io.jessytsiriniaina.internalrequestmanagement.dto.requestcomment.CreateRequestCommentDto;
 import io.jessytsiriniaina.internalrequestmanagement.dto.requestcomment.RequestCommentResponseDto;
 import io.jessytsiriniaina.internalrequestmanagement.service.RequestCommentService;
+import io.jessytsiriniaina.internalrequestmanagement.security.UserPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,8 +32,9 @@ public class RequestCommentController {
 
     @PostMapping
     public ResponseEntity<RequestCommentResponseDto> create(
-            @PathVariable Long requestId, @Valid @RequestBody CreateRequestCommentDto dto) {
-        RequestCommentResponseDto created = requestCommentService.create(requestId, dto);
+            @PathVariable Long requestId, @Valid @RequestBody CreateRequestCommentDto dto,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        RequestCommentResponseDto created = requestCommentService.create(requestId, dto, principal);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
@@ -45,8 +48,9 @@ public class RequestCommentController {
     }
 
     @DeleteMapping("/{commentId}")
-    public ResponseEntity<Void> delete(@PathVariable Long requestId, @PathVariable Long commentId) {
-        requestCommentService.delete(requestId, commentId);
+    public ResponseEntity<Void> delete(@PathVariable Long requestId, @PathVariable Long commentId,
+                                       @AuthenticationPrincipal UserPrincipal principal) {
+        requestCommentService.delete(requestId, commentId, principal);
         return ResponseEntity.noContent().build();
     }
 }

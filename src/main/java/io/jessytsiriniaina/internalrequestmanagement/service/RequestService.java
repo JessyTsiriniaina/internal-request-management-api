@@ -12,6 +12,7 @@ import io.jessytsiriniaina.internalrequestmanagement.entity.RequestType;
 import io.jessytsiriniaina.internalrequestmanagement.entity.User;
 import io.jessytsiriniaina.internalrequestmanagement.enums.RequestPriority;
 import io.jessytsiriniaina.internalrequestmanagement.enums.RequestStatus;
+import io.jessytsiriniaina.internalrequestmanagement.enums.UserRole;
 import io.jessytsiriniaina.internalrequestmanagement.exception.BusinessException;
 import io.jessytsiriniaina.internalrequestmanagement.exception.ResourceNotFoundException;
 import io.jessytsiriniaina.internalrequestmanagement.mapper.RequestMapper;
@@ -19,6 +20,7 @@ import io.jessytsiriniaina.internalrequestmanagement.repository.RequestCommentRe
 import io.jessytsiriniaina.internalrequestmanagement.repository.RequestRepository;
 import io.jessytsiriniaina.internalrequestmanagement.repository.RequestTypeRepository;
 import io.jessytsiriniaina.internalrequestmanagement.repository.UserRepository;
+import io.jessytsiriniaina.internalrequestmanagement.security.UserPrincipal;
 import io.jessytsiriniaina.internalrequestmanagement.specification.RequestSpecification;
 import java.time.Instant;
 import org.springframework.data.domain.Page;
@@ -48,7 +50,7 @@ public class RequestService {
         this.requestCommentRepository = requestCommentRepository;
     }
 
-    public RequestResponseDto create(CreateRequestDto dto) {
+    public RequestResponseDto create(CreateRequestDto dto, UserPrincipal principal) {
         validateUrgent(dto.priority(), dto.description());
 
         RequestType type =
@@ -56,10 +58,15 @@ public class RequestService {
                         .findById(dto.typeId())
                         .orElseThrow(() -> new ResourceNotFoundException("RequestType not found: " + dto.typeId()));
 
+        Long createdByIdParam = principal != null ? principal.getId() : dto.createdById();
+        if (createdByIdParam == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "createdBy is required (authentication required)");
+        }
+        final Long effectiveCreatedById = createdByIdParam;
         User createdBy =
                 userRepository
-                        .findById(dto.createdById())
-                        .orElseThrow(() -> new ResourceNotFoundException("User not found (createdBy): " + dto.createdById()));
+                        .findById(effectiveCreatedById)
+                        .orElseThrow(() -> new ResourceNotFoundException("User not found (createdBy): " + effectiveCreatedById));
 
         User assignedTo = null;
         if (dto.assignedToId() != null) {
@@ -70,28 +77,71 @@ public class RequestService {
                                     () -> new ResourceNotFoundException("User not found (assignedTo): " + dto.assignedToId()));
         }
 
-        // TODO: replace createdById with authenticated user when JWT is added
         Request request =
                 new Request(dto.title(), dto.description(), dto.priority(), type, createdBy);
         request.setAssignedTo(assignedTo);
-        // status forced to PENDING (default in entity), ignore any client status
         Request saved = requestRepository.save(request);
         return RequestMapper.toResponse(saved);
     }
 
+    // Backward compat overload
+    public RequestResponseDto create(CreateRequestDto dto) {
+        return create(dto, null);
+    }
+
     @Transactional(readOnly = true)
-    public RequestResponseDto findById(Long id) {
+    public RequestResponseDto findById(Long id, UserPrincipal principal) {
         Request request =
                 requestRepository
                         .findByIdAndDeletedFalse(id)
                         .orElseThrow(() -> new ResourceNotFoundException("Request not found: " + id));
-        // embed preview: latest 10 comments + total count
+        enforceReadAccess(request, principal);
         java.util.List<RequestComment> allComments =
                 requestCommentRepository.findByRequestIdAndDeletedFalseOrderByCreatedAtAsc(id);
         long count = requestCommentRepository.countByRequestIdAndDeletedFalse(id);
         java.util.List<RequestComment> preview =
                 allComments.size() > 10 ? allComments.subList(Math.max(0, allComments.size() - 10), allComments.size()) : allComments;
         return RequestMapper.toResponse(request, preview, count);
+    }
+
+    @Transactional(readOnly = true)
+    public RequestResponseDto findById(Long id) {
+        return findById(id, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RequestResponseDto> findAll(
+            RequestStatus status,
+            RequestPriority priority,
+            Long typeId,
+            Long createdById,
+            Long assignedToId,
+            String department,
+            Boolean includeDeleted,
+            Pageable pageable,
+            UserPrincipal principal) {
+
+        // R4 scoping: enforce principal-based filter
+        Long effectiveCreatedById = createdById;
+        String effectiveDepartment = department;
+        if (principal != null) {
+            if (principal.getRole() == UserRole.EMPLOYEE) {
+                effectiveCreatedById = principal.getId();
+            } else if (principal.getRole() == UserRole.MANAGER) {
+                if (principal.getDepartmentId() != null) {
+                    effectiveDepartment = String.valueOf(principal.getDepartmentId());
+                }
+            }
+            // ADMIN: no override
+        }
+
+        Specification<Request> spec =
+                RequestSpecification.filter(
+                        status, priority, typeId, effectiveCreatedById, assignedToId, effectiveDepartment, includeDeleted);
+        return requestRepository.findAll(spec, pageable).map(req -> {
+            long count = requestCommentRepository.countByRequestIdAndDeletedFalse(req.getId());
+            return RequestMapper.toResponse(req, java.util.List.of(), count);
+        });
     }
 
     @Transactional(readOnly = true)
@@ -104,23 +154,15 @@ public class RequestService {
             String department,
             Boolean includeDeleted,
             Pageable pageable) {
-
-        Specification<Request> spec =
-                RequestSpecification.filter(
-                        status, priority, typeId, createdById, assignedToId, department, includeDeleted);
-        return requestRepository.findAll(spec, pageable).map(req -> {
-            long count = requestCommentRepository.countByRequestIdAndDeletedFalse(req.getId());
-            return RequestMapper.toResponse(req, java.util.List.of(), count);
-        });
+        return findAll(status, priority, typeId, createdById, assignedToId, department, includeDeleted, pageable, null);
     }
 
-    public RequestResponseDto update(Long id, UpdateRequestDto dto) {
+    public RequestResponseDto update(Long id, UpdateRequestDto dto, UserPrincipal principal) {
         Request request =
                 requestRepository
                         .findByIdAndDeletedFalse(id)
                         .orElseThrow(() -> new ResourceNotFoundException("Request not found: " + id));
 
-        // Règle 1: only PENDING can be modified
         if (request.getStatus() != RequestStatus.PENDING) {
             throw new BusinessException(
                     HttpStatus.CONFLICT, "Only PENDING requests can be modified (current: " + request.getStatus() + ")");
@@ -128,6 +170,13 @@ public class RequestService {
 
         if (request.isDeleted()) {
             throw new BusinessException(HttpStatus.CONFLICT, "Cannot modify a deleted request");
+        }
+
+        // Ownership check for EMPLOYEE
+        if (principal != null && principal.getRole() == UserRole.EMPLOYEE) {
+            if (!request.getCreatedBy().getId().equals(principal.getId())) {
+                throw new BusinessException(HttpStatus.FORBIDDEN, "You can only modify your own requests");
+            }
         }
 
         RequestType type =
@@ -156,10 +205,13 @@ public class RequestService {
         return RequestMapper.toResponse(saved);
     }
 
+    public RequestResponseDto update(Long id, UpdateRequestDto dto) {
+        return update(id, dto, null);
+    }
+
     // --- Workflow: strict state machine PENDING -> IN_PROGRESS -> APPROVED|REJECTED ; PENDING|IN_PROGRESS -> CANCELLED ---
 
     public RequestResponseDto startProgress(Long id) {
-        // TODO Phase 4: check MANAGER/ADMIN else throw BusinessException(FORBIDDEN)
         Request request = getActiveOrThrow(id);
         if (request.getStatus() != RequestStatus.PENDING) {
             throw new BusinessException(
@@ -172,9 +224,7 @@ public class RequestService {
     }
 
     public RequestResponseDto approve(Long id) {
-        // TODO Phase 4: check MANAGER/ADMIN else throw BusinessException(FORBIDDEN)
         Request request = getActiveOrThrow(id);
-        // Strict: only IN_PROGRESS -> APPROVED
         if (request.getStatus() != RequestStatus.IN_PROGRESS) {
             throw new BusinessException(
                     HttpStatus.CONFLICT,
@@ -187,7 +237,6 @@ public class RequestService {
     }
 
     public RequestResponseDto reject(Long id, RejectRequestDto dto) {
-        // TODO Phase 4: check MANAGER/ADMIN else throw BusinessException(FORBIDDEN)
         Request request = getActiveOrThrow(id);
         if (request.getStatus() != RequestStatus.IN_PROGRESS) {
             throw new BusinessException(
@@ -202,7 +251,6 @@ public class RequestService {
     }
 
     public RequestResponseDto assign(Long id, AssignRequestDto dto) {
-        // TODO Phase 4: check MANAGER/ADMIN else throw BusinessException(FORBIDDEN)
         Request request = getActiveOrThrow(id);
         if (request.isDeleted()) {
             throw new BusinessException(HttpStatus.CONFLICT, "Cannot assign a deleted request");
@@ -222,19 +270,28 @@ public class RequestService {
         return RequestMapper.toResponse(requestRepository.save(request));
     }
 
-    public RequestResponseDto cancel(Long id, CancelRequestDto dto) {
-        // TODO Phase 4: check MANAGER/ADMIN else throw BusinessException(FORBIDDEN) — per confirmation all workflow needs MANAGER/ADMIN
+    public RequestResponseDto cancel(Long id, CancelRequestDto dto, UserPrincipal principal) {
         Request request = getActiveOrThrow(id);
         if (request.getStatus() != RequestStatus.PENDING && request.getStatus() != RequestStatus.IN_PROGRESS) {
             throw new BusinessException(
                     HttpStatus.CONFLICT,
                     "Only PENDING or IN_PROGRESS can be cancelled (current: " + request.getStatus() + ")");
         }
+        // EMPLOYEE can only cancel own
+        if (principal != null && principal.getRole() == UserRole.EMPLOYEE) {
+            if (!request.getCreatedBy().getId().equals(principal.getId())) {
+                throw new BusinessException(HttpStatus.FORBIDDEN, "You can only cancel your own requests");
+            }
+        }
         request.setStatus(RequestStatus.CANCELLED);
         request.setCancellationReason(dto.reason());
         request.setCancelledAt(Instant.now());
         addSystemComment(request, "Cancelled: " + dto.reason());
         return RequestMapper.toResponse(requestRepository.save(request));
+    }
+
+    public RequestResponseDto cancel(Long id, CancelRequestDto dto) {
+        return cancel(id, dto, null);
     }
 
     // --- helpers ---
@@ -250,6 +307,27 @@ public class RequestService {
         return request;
     }
 
+    private void enforceReadAccess(Request request, UserPrincipal principal) {
+        if (principal == null) return;
+        if (principal.getRole() == UserRole.ADMIN) return;
+        if (principal.getRole() == UserRole.MANAGER) {
+            Long deptId = principal.getDepartmentId();
+            if (deptId == null) return;
+            User creator = request.getCreatedBy();
+            if (creator.getDepartment() != null && deptId.equals(creator.getDepartment().getId())) return;
+            // Also allow if manager is assignee or creator
+            if (request.getCreatedBy().getId().equals(principal.getId())) return;
+            if (request.getAssignedTo() != null && request.getAssignedTo().getId().equals(principal.getId())) return;
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Managers can only view requests from their department");
+        }
+        // EMPLOYEE
+        if (!request.getCreatedBy().getId().equals(principal.getId())) {
+            // Allow if assignedTo is the employee
+            if (request.getAssignedTo() != null && request.getAssignedTo().getId().equals(principal.getId())) return;
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You can only view your own requests");
+        }
+    }
+
     private void validateUrgent(RequestPriority priority, String description) {
         if (priority == RequestPriority.URGENT && (description == null || description.isBlank())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "URGENT requests must have a justification (description)");
@@ -257,22 +335,26 @@ public class RequestService {
     }
 
     private void addSystemComment(Request request, String content) {
-        // Use createdBy as author for system comment if no actor context yet (Phase 4 will use authenticated user)
         User author = request.getCreatedBy();
-        // Ensure author is initialized; fallback to assignedTo or createdBy
         RequestComment comment = new RequestComment(content, request, author);
         request.getComments().add(comment);
-        // Persist via cascade ALL on Request.comments; also save explicitly for clarity
-        // requestCommentRepository.save(comment); // not needed due to cascade, but keep for audit
     }
 
-    public void delete(Long id) {
+    public void delete(Long id, UserPrincipal principal) {
         Request request =
                 requestRepository
                         .findByIdAndDeletedFalse(id)
                         .orElseThrow(() -> new ResourceNotFoundException("Request not found: " + id));
-        // soft delete with 2 cols (A)
+        if (principal != null && principal.getRole() == UserRole.EMPLOYEE) {
+            if (!request.getCreatedBy().getId().equals(principal.getId())) {
+                throw new BusinessException(HttpStatus.FORBIDDEN, "You can only delete your own requests");
+            }
+        }
         request.softDelete();
         requestRepository.save(request);
+    }
+
+    public void delete(Long id) {
+        delete(id, null);
     }
 }
